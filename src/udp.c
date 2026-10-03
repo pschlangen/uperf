@@ -54,6 +54,7 @@
 #define	UDP_HANDSHAKE	"uperf udp handshake"
 #if defined(HAVE_RECVMMSG) || defined(HAVE_SENDMMSG)
 #define	UDP_MMSG_STACK_SIZE	16
+#define UDP_MMSG_STACK_BYTES (UDP_MMSG_STACK_SIZE * 1024)
 #endif
 
 typedef struct {
@@ -173,6 +174,8 @@ protocol_udp_read(protocol_t *p, void *buffer, int n, void *options)
 	struct iovec *iovs = NULL;
 	struct sockaddr_storage from;
 	char *recvbuf = NULL;
+	char stack_recvbuf[UDP_MMSG_STACK_BYTES];
+	int recvbuf_heap = 0;
 
 	if (fo != NULL) {
 		timeout = (int) fo->poll_timeout/1.0e+6;
@@ -236,15 +239,20 @@ protocol_udp_read(protocol_t *p, void *buffer, int n, void *options)
 			}
 		}
 
-		recvbuf = malloc((size_t)batch_size * n);
-		if (recvbuf == NULL) {
-			if (mmsgs != stack_mmsgs) {
-				free(mmsgs);
-				free(iovs);
+		if ((size_t)batch_size * n <= sizeof(stack_recvbuf)) {
+			recvbuf = stack_recvbuf;
+		} else {
+			recvbuf = malloc((size_t)batch_size * n);
+			if (recvbuf == NULL) {
+				if (mmsgs != stack_mmsgs) {
+					free(mmsgs);
+					free(iovs);
+				}
+				uperf_log_msg(UPERF_LOG_WARN, errno,
+					"Cannot allocate receive buffer");
+				return (-1);
 			}
-			uperf_log_msg(UPERF_LOG_WARN, errno,
-				"Cannot allocate receive buffer");
-			return (-1);
+			recvbuf_heap = 1;
 		}
 
 		for (i = 0; i < batch_size; i++) {
@@ -263,7 +271,8 @@ protocol_udp_read(protocol_t *p, void *buffer, int n, void *options)
 		for (i = 0; i < repeat; i++) {
 			if (timeout > 0) {
 				if (generic_poll(pd->sock, timeout, POLLIN) <= 0) {
-					free(recvbuf);
+					if (recvbuf_heap)
+						free(recvbuf);
 					if (mmsgs != stack_mmsgs) {
 						free(mmsgs);
 						free(iovs);
@@ -290,7 +299,8 @@ protocol_udp_read(protocol_t *p, void *buffer, int n, void *options)
 					if (errno == EINTR)
 						continue;
 
-					free(recvbuf);
+					if (recvbuf_heap)
+						free(recvbuf);
 
 					if (mmsgs != stack_mmsgs) {
 						free(mmsgs);
@@ -310,7 +320,8 @@ protocol_udp_read(protocol_t *p, void *buffer, int n, void *options)
 				total += mmsgs[j].msg_len;
 		}
 
-		free(recvbuf);
+		if (recvbuf_heap)
+			free(recvbuf);
 
 		if (mmsgs != stack_mmsgs) {
 			free(mmsgs);

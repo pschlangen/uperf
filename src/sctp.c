@@ -50,6 +50,7 @@
 #include "generic.h"
 
 #define SCTP_MMSG_STACK_SIZE 16
+#define SCTP_MMSG_STACK_BYTES (SCTP_MMSG_STACK_SIZE * 1024)
 
 static void
 set_sctp_options(int fd, int family, flowop_options_t *f)
@@ -430,6 +431,8 @@ protocol_sctp_read(protocol_t *p, void *buffer, int size, void *options)
 			[CMSG_SPACE(sizeof(struct sctp_rcvinfo))];
 	char (*cbufs)[CMSG_SPACE(sizeof(struct sctp_rcvinfo))] = NULL;
 	char *recvbuf = NULL;
+	char stack_recvbuf[SCTP_MMSG_STACK_BYTES];
+	int recvbuf_heap = 0;
 	int timeout = 0;
 
 	if (options) {
@@ -488,17 +491,22 @@ protocol_sctp_read(protocol_t *p, void *buffer, int size, void *options)
 			}
 		}
 
-		recvbuf = malloc(batch_size * size);
-		if (recvbuf == NULL) {
-			if (mmsgs != stack_mmsgs) {
-				free(mmsgs);
-				free(iovs);
-				free(cbufs);
-			}
+		if ((size_t)batch_size * size <= sizeof(stack_recvbuf)) {
+			recvbuf = stack_recvbuf;
+		} else {
+			recvbuf = malloc((size_t)batch_size * size);
+			if (recvbuf == NULL) {
+				if (mmsgs != stack_mmsgs) {
+					free(mmsgs);
+					free(iovs);
+					free(cbufs);
+				}
 
-			uperf_log_msg(UPERF_LOG_WARN, errno,
-			    "Cannot allocate receive buffer");
-			return (-1);
+				uperf_log_msg(UPERF_LOG_WARN, errno,
+					"Cannot allocate receive buffer");
+				return (-1);
+			}
+			recvbuf_heap = 1;
 		}
 
 		for (i = 0; i < batch_size; i++) {
@@ -517,7 +525,8 @@ protocol_sctp_read(protocol_t *p, void *buffer, int size, void *options)
 		for (i = 0; i < repeat; i++) {
 			if (timeout > 0) {
 				if (generic_poll(p->fd, timeout, POLLIN) <= 0) {
-					free(recvbuf);
+					if (recvbuf_heap)
+						free(recvbuf);
 
 					if (mmsgs != stack_mmsgs) {
 						free(mmsgs);
@@ -541,7 +550,8 @@ protocol_sctp_read(protocol_t *p, void *buffer, int size, void *options)
 				0, NULL);
 
 			if (msgs_received < 0) {
-				free(recvbuf);
+				if (recvbuf_heap)
+					free(recvbuf);
 
 				if (mmsgs != stack_mmsgs) {
 					free(mmsgs);
@@ -560,7 +570,8 @@ protocol_sctp_read(protocol_t *p, void *buffer, int size, void *options)
 			}
 		}
 
-		free(recvbuf);
+		if (recvbuf_heap)
+			free(recvbuf);
 
 		if (mmsgs != stack_mmsgs) {
 			free(mmsgs);
