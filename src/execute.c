@@ -183,6 +183,7 @@ int
 group_execute(strand_t *strand, group_t *g)
 {
 	int error = 0;
+	int exit_barrier_pending = 0;
 	txn_t *txn;
 
 	strand->buffer = (char *) calloc(1, group_max_dto_size(g));
@@ -191,8 +192,18 @@ group_execute(strand_t *strand, group_t *g)
 	for (txn = g->tlist; txn; txn = txn->next) {
 		barrier_t *b = shm_get_barrier(strand->shmptr, g->groupid,
 				    txn->txnid);
+
 		strand->strand_state = STRAND_STATE_AT_BARRIER;
 		wait_barrier(b);
+
+		if (exit_barrier_pending)
+			break;
+
+
+		if (STRAND_EXIT_REQUESTED(strand)) {
+			exit_barrier_pending = 1;
+			continue;
+		}
 
 		if (global_shm->global_error > 1) {
 			break;
@@ -200,6 +211,11 @@ group_execute(strand_t *strand, group_t *g)
 		strand->strand_state = STRAND_STATE_EXECUTING;
 		error = txn_execute(strand, txn);
 		CLEAR_SIGNAL(strand);
+
+		if (STRAND_EXIT_REQUESTED(strand)) {
+			exit_barrier_pending = 1;
+			continue;
+		}
 
 		/*
 		 * Possible values of error are success, failure and

@@ -244,19 +244,17 @@ strand_fini(strand_t *s)
 }
 
 /*
- * Wait for all the strands to terminate and join
- * An "error" indicator is passed to this because,
- * an error can be due to a thread getting stuck in a blocked
- * system call, and not being able to exit.
- * Since we will be calling exit(2) pretty soon, there is no
- * need to join (only thread).
- * For processes, we wait even on error since there is no possibility
- * that the process has not exited.
+ * Wait for all the strands to terminate and join them.
+ *
+ * On an error, strand_killall() requests orderly termination of
+ * pthread strands. We must join them before releasing shared
+ * strand/workorder state.
  */
 void
-wait_for_strands(uperf_shm_t *shm, int error)
+wait_for_strands(uperf_shm_t *shm)
 {
 	int i;
+	int rc;
 	static int joined = 0;
 
 	if (joined == 1)
@@ -277,12 +275,11 @@ wait_for_strands(uperf_shm_t *shm, int error)
 			}
 
 		} else {
-			/* if some error occurs, do NOT wait. */
-			if (!error)
-				if (pthread_join(s->tid, 0) != 0) {
-					uperf_log_msg(UPERF_LOG_ERROR, errno,
-					    "pthread join");
-				}
+			rc = pthread_join(s->tid, 0);
+			if (rc != 0) {
+				uperf_log_msg(UPERF_LOG_ERROR, rc,
+				    "pthread join");
+			}
 		}
 	}
 	joined = 1;
@@ -363,6 +360,13 @@ strand_killall(uperf_shm_t *shm)
 	int i;
 	for (i = 0; i < shm->no_strands; i++) {
 		strand_t *s = shm_get_strand(shm, i);
+
+		if (STRAND_EXIT(s))
+			continue;
+
+		s->exit_requested = 1;
+		s->signalled = 1;
+
 		signal_strand(s, SIGKILL);
 	}
 	return (0);

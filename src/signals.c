@@ -58,12 +58,13 @@
 static void
 signal_handler(int signal)
 {
+	if (signal == SIGUSR1) {
+		return;
+	}
 #ifdef DEBUG
 	psignal(signal, "Thread aborting");
 #endif /* DEBUG */
-	if (signal == SIGUSR1) {
-		pthread_exit(NULL);
-	} else if (signal == SIGINT) {
+	if (signal == SIGINT) {
 		psignal(signal, "\nGot SIGINT Aborting ...");
 #if defined(UPERF_SOLARIS)
 		sigsend(P_PGID, getpgid(getpid()), SIGKILL);

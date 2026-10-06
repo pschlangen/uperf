@@ -347,7 +347,7 @@ slave_master(protocol_t *p)
 		/* Kill threads on error */
 		strand_killall(shm);
 	}
-	wait_for_strands(shm, error);
+	wait_for_strands(shm);
 	newstat_end(0, AGG_STAT(shm), 0, 0);
 
 	/*

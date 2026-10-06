@@ -41,6 +41,7 @@ typedef enum {
 #define	STRAND_AT_BARRIER(s)	((s)->strand_state == STRAND_STATE_AT_BARRIER)
 #define	STRAND_EXECUTING(s)	((s)->strand_state == STRAND_STATE_EXECUTING)
 #define	STRAND_EXIT(s)	((s)->strand_state == STRAND_STATE_EXIT)
+#define STRAND_EXIT_REQUESTED(s)	((s)->exit_requested != 0)
 
 #define SIGNALLED(A)	((A)->signalled == 1)
 #define CLEAR_SIGNAL(A)	(A)->signalled = 0
@@ -71,6 +72,7 @@ struct uperf_strand {
 	int 		role;
 	volatile uint32_t	strand_flag;
 	volatile uint32_t	signalled;
+	volatile uint32_t	exit_requested;
 	volatile strand_state_t	strand_state;
 	group_t		*worklist;
 	char 		*buffer;
@@ -94,7 +96,7 @@ int strand_add_connection(strand_t *, protocol_t *);
 int strand_delete_connection(strand_t *, int);
 int signal_all_strands(uperf_shm_t *, int, int);
 int strand_killall(uperf_shm_t *);
-void wait_for_strands(uperf_shm_t *, int);
+void wait_for_strands(uperf_shm_t *);
 int signal_strand(strand_t *s, int signal);
 void strand_fini(strand_t *s);
 void * strand_run(void *sp);

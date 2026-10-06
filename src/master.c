@@ -583,7 +583,7 @@ master(workorder_t *w)
 	if (error == 0 && shm->global_error != 0)
 		error = shm->global_error;
 
-	(void) wait_for_strands(shm, error);
+	(void) wait_for_strands(shm);
 	newstat_end(0, AGG_STAT(shm), 0, 0);
 
 	shm->current_time = GETHRTIME();
