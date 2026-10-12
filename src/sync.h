@@ -47,6 +47,7 @@ typedef	struct sync_barrier {
 	volatile unsigned int limit;
 	int group;
 	int txn;
+	int released;
 } barrier_t;
 
 int init_barrier(barrier_t *, int);

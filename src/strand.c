@@ -358,14 +358,40 @@ int
 strand_killall(uperf_shm_t *shm)
 {
 	int i;
+	strand_t *s;
+	group_t *worklist = NULL;
+	group_t *g;
+	txn_t *txn;
+
 	for (i = 0; i < shm->no_strands; i++) {
 		strand_t *s = shm_get_strand(shm, i);
+		s = shm_get_strand(shm, i);
 
 		if (STRAND_EXIT(s))
 			continue;
 
 		s->exit_requested = 1;
 		s->signalled = 1;
+
+		if (worklist == NULL)
+			worklist = s->worklist;
+	}
+
+	for (g = worklist; g != NULL; g = g->next) {
+		for (txn = g->tlist; txn != NULL; txn = txn->next) {
+			barrier_t *b;
+
+			b = shm_get_barrier(shm, g->groupid, txn->txnid);
+			if (b != NULL)
+				(void) cancel_barrier(b);
+			}
+		}
+
+	for (i = 0; i < shm->no_strands; i++) {
+		s = shm_get_strand(shm, i);
+
+		if (STRAND_EXIT(s))
+			continue;
 
 		signal_strand(s, SIGKILL);
 	}

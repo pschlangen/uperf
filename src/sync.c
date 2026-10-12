@@ -55,6 +55,7 @@ init_barrier(barrier_t *bar, int threshold)
 
 	bar->count = 0;
 	bar->limit = threshold;
+	bar->released = 0;
 
 	if (pthread_rwlock_wrlock(&bar->barrier) != 0) {
 		printf("Initial write lock grab failed\n");
@@ -80,7 +81,24 @@ init_barrier(barrier_t *bar, int threshold)
 int
 unlock_barrier(barrier_t *bar)
 {
-	return (pthread_rwlock_unlock(&bar->barrier));
+	int rc;
+
+	if (bar == NULL)
+		return EINVAL;
+
+	if (bar->released)
+		return 0;
+
+	rc = pthread_rwlock_unlock(&bar->barrier);
+	if (rc == 0)
+		bar->released = 1;
+
+	return rc;
+}
+
+int
+cancel_barrier(barrier_t *bar) {
+	return unlock_barrier(bar);
 }
 
 int
