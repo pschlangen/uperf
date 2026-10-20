@@ -45,6 +45,7 @@ typedef	struct sync_barrier {
 	volatile unsigned int count;
 #endif /* HAVE_STDATOMIC_H */
 	volatile unsigned int limit;
+	int released;
 	int group;
 	int txn;
 } barrier_t;

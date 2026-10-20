@@ -583,6 +583,9 @@ master(workorder_t *w)
 	if (error == 0 && shm->global_error != 0)
 		error = shm->global_error;
 
+	if (error != 0)
+		(void) strand_killall(shm);
+
 	(void) wait_for_strands(shm);
 	newstat_end(0, AGG_STAT(shm), 0, 0);
 

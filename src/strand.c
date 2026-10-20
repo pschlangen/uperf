@@ -366,8 +366,16 @@ strand_killall(uperf_shm_t *shm)
 
 		s->exit_requested = 1;
 		s->signalled = 1;
+	}
 
-		signal_strand(s, SIGKILL);
+	for (i = 0; i < shm->nobarrier; i++)
+		(void) cancel_barrier(&shm->bar[i]);
+
+	for (i = 0; i < shm->no_strands; i++) {
+		strand_t *s = shm_get_strand(shm, i);
+
+		if (!STRAND_EXIT(s))
+			signal_strand(s, SIGKILL);
 	}
 	return (0);
 }
